@@ -45,32 +45,28 @@ public class Map : IDisposable
             return activateAfterMin < max - min ? activateAfterMin : -1;
         }
 
-        public (float enter, float exit) Intersect(Vector3 start, Vector3 dir) => Type switch
-        {
+        public (float enter, float exit) Intersect(Vector3 start, Vector3 dir) => Type switch {
             AOEShape.Circle => Geom.IntersectRayCircle(Origin, R1, start, dir),
             AOEShape.Square => Geom.IntersectRaySquare(Origin, R1, start, dir),
             AOEShape.Rect => Geom.IntersectRayRect(Origin, R1, R2, Rotation, start, dir),
             _ => (float.NaN, float.NaN)
         };
 
-        public bool Contains(Vector3 p) => Type switch
-        {
+        public bool Contains(Vector3 p) => Type switch {
             AOEShape.Circle => (p - Origin).LengthXZSq() <= R1 * R1,
             AOEShape.Square => (p - Origin).MaxAbsCoordXZ() <= R1,
             AOEShape.Rect => Geom.RectContains(Origin, R1, R2, Rotation, p),
             _ => false
         };
 
-        public bool Draw(DebugDrawer d, uint color) => Type switch
-        {
+        public bool Draw(DebugDrawer d, uint color) => Type switch {
             AOEShape.Circle => d.DrawWorldCircle(Origin, R1, color),
             AOEShape.Square => d.DrawWorldSquare(Origin, R1, color),
             AOEShape.Rect => d.DrawWorldRect(Origin, R1, R2, Rotation, color),
             _ => false
         };
 
-        public bool Rasterize(PathfindMap m, DateTime now, float leeway) => NextActivation != default ? Type switch
-        {
+        public bool Rasterize(PathfindMap m, DateTime now, float leeway) => NextActivation != default ? Type switch {
             AOEShape.Circle => m.BlockPixelsInsideCircle(Origin.XZ(), R1, (float)(NextActivation - now).TotalSeconds, 0.1f, Repeat, leeway),
             AOEShape.Square => m.BlockPixelsInsideSquare(Origin.XZ(), R1, (float)(NextActivation - now).TotalSeconds, 0.1f, Repeat, leeway),
             AOEShape.Rect => false, // TODO: implement
@@ -274,9 +270,15 @@ public class Map : IDisposable
 
     protected int FindIndexInSequence(AOESequence sequence, Vector3 pos)
     {
-        for (int i = 0; i < sequence.Count; ++i)
+        // several elements can legitimately share an origin (e.g. a line that sweeps out and back),
+        // so prefer the first match at or after the element we expect to fire next, wrapping around.
+        // for sequences with unique origins this returns exactly what a plain front-to-back scan would.
+        for (int k = 0; k < sequence.Count; ++k)
+        {
+            var i = (sequence.NextIndex + k) % sequence.Count;
             if ((AOEs[sequence.StartIndex + i].Origin - pos).LengthSquared() < 1)
                 return i;
+        }
         return -1;
     }
 

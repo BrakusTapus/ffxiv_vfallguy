@@ -51,7 +51,7 @@ public unsafe class GameEvents : IDisposable
         _processActionEffectPacketHook.Enable();
 
         _startCastHook = Service.Hook.HookFromSignature<StartCastDelegate>("E8 ?? ?? ?? ?? 80 7E 22 11", StartCastDetour);
-		_startCastHook.Enable();
+        _startCastHook.Enable();
         Service.Log.Information($"_processActionEffectPacketHook: 0x{_processActionEffectPacketHook.Address:X}");
         Service.Log.Information($"_startCastHook: 0x{_startCastHook.Address:X}");
     }
@@ -66,13 +66,26 @@ public unsafe class GameEvents : IDisposable
     {
         _processActionEffectPacketHook.Original(casterEntityId, casterPtr, targetPos, header, effects, targetEntityIds);
         if (header->ActionType == (byte)ActionType.Action)
+        {
             ActionEffectEvent?.Invoke(header->ActionId, casterPtr->GameObject.Position);
+            LogEvent("effect", header->ActionId, casterPtr->GameObject.Position);
+        }
     }
 
     private void StartCastDetour(Character* self, ActionType actionType, uint actionId, ushort* intPos, float rot, float castTime)
     {
         _startCastHook.Original(self, actionType, actionId, intPos, rot, castTime);
         if (actionType == ActionType.Action)
+        {
             StartCastEvent?.Invoke(actionId, self->GameObject.Position);
+            LogEvent("cast", actionId, self->GameObject.Position, castTime);
+        }
+    }
+    private static void LogEvent(string kind, uint id, Vector3 pos, float castTime = 0)
+    {
+        if (Service.ClientState.TerritoryType != 1165)
+            return;
+        var name = Service.LuminaRow<Lumina.Excel.Sheets.Action>(id)?.Name.ToString() ?? "?";
+        Service.Log.Info($"[{kind}] {DateTime.Now:HH:mm:ss.fff} id={id} '{name}' pos=({pos.X:f2}, {pos.Y:f2}, {pos.Z:f2}) cast={castTime:f2}");
     }
 }
